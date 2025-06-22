@@ -1,0 +1,123 @@
+<form id="zonas-comunes-form">
+    <div class="form-group">
+        <label for="mi_nombre">Nombre:</label>
+        <input type="text" id="mi_nombre" name="mi_nombre" required>
+    </div>
+    
+    <div class="form-group">
+        <label for="mi_area">Área:</label>
+        <select id="mi_area" name="mi_area" required>
+            <option value="">Selecciona un área</option>
+            <option value="Piscina">Piscina</option>
+            <option value="Gimnasio">Gimnasio</option>
+            <option value="Salón Social">Salón Social</option>
+            <option value="Parqueadero">Parqueadero</option>
+            <option value="Otro">Otro</option>
+        </select>
+    </div>
+    
+    <div class="form-group">
+        <label for="mi_mensaje">Mensaje:</label>
+        <textarea id="mi_mensaje" name="mi_mensaje" rows="4" required></textarea>
+    </div>
+    
+    <button type="submit">Enviar Mensaje</button>
+    <div id="form-response"></div>
+</form>
+
+<style>
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+button[type="submit"] {
+    background-color: #007cba;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+button[type="submit"]:hover {
+    background-color: #005a87;
+}
+
+#form-response {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 4px;
+    display: none;
+}
+
+#form-response.success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+#form-response.error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+</style>
+
+<script>
+jQuery(document).ready(function($) {
+    $('#zonas-comunes-form').on('submit', function(e) {
+        e.preventDefault();
+        
+        var formData = {
+            action: 'FormZonasComunesSubmission',
+            mi_nombre: $('#mi_nombre').val(),
+            mi_area: $('#mi_area').val(),
+            mi_mensaje: $('#mi_mensaje').val(),
+            zonas_comunes_nonce: zonas_comunes_ajax.nonce
+        };
+        
+        // Mostrar indicador de carga
+        $('button[type="submit"]').prop('disabled', true).text('Enviando...');
+        
+        $.ajax({
+            url: zonas_comunes_ajax.ajax_url,
+            type: 'POST',
+            data: formData,
+            success: function(response) {
+                var responseDiv = $('#form-response');
+                
+                if (response.success) {
+                    responseDiv.removeClass('error').addClass('success')
+                              .text(response.data).show();
+                    $('#zonas-comunes-form')[0].reset();
+                } else {
+                    responseDiv.removeClass('success').addClass('error')
+                              .text(response.data).show();
+                }
+            },
+            error: function() {
+                $('#form-response').removeClass('success').addClass('error')
+                                   .text('Error de conexión. Inténtalo de nuevo.').show();
+            },
+            complete: function() {
+                $('button[type="submit"]').prop('disabled', false).text('Enviar Mensaje');
+            }
+        });
+    });
+});
+</script>
