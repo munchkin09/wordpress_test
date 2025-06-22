@@ -53,11 +53,30 @@ function mitema_display_mensajes() {
 
     ob_start();
     if ($entries) {
+        echo '<div class="mi-mensajes">';
         foreach ($entries as $e) {
             $likes = intval($e->likes);
             $liked_users = $e->liked_users ? explode(',', $e->liked_users) : [];
             $already_liked = is_user_logged_in() && in_array(get_current_user_id(), $liked_users);
+
+            echo '<div class="mi-mensaje">';
+            echo '<p><strong>' . esc_html($e->nombre) . ' (' . esc_html($e->area) . '):</strong> ' . esc_html($e->mensaje) . '</p>';
+
+            if ($already_liked) {
+                echo '<span class="heart liked">&#x2764;</span>';
+                echo '<span class="like-count">' . $likes . '</span>';
+            } else {
+                echo '<form method="post" class="like-form">';
+                wp_nonce_field('mi_like_action', 'mi_like_nonce');
+                echo '<input type="hidden" name="mi_like_id" value="' . intval($e->id) . '" />';
+                echo '<button type="submit" class="heart">&#x2764;</button>';
+                echo '<span class="like-count">' . $likes . '</span>';
+                echo '</form>';
+            }
+
+            echo '</div>';
         }
+        echo '</div>';
     } else {
         echo '<p>No hay mensajes.</p>';
     }
