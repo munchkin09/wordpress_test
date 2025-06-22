@@ -1,0 +1,29 @@
+# Ignora el core de WordPress si lo instalas con Composer o manual
+/wp-admin/
+/wp-includes/
+license.txt
+readme.html
+xmlrpc.php
+
+# Ignora uploads (se generan dinámicamente)
+wp-content/uploads/
+
+# Ignora plugins que no son tuyos
+wp-content/plugins/*
+!wp-content/plugins/mi-plugin/
+
+# Ignora temas que no son tuyos
+wp-content/themes/*
+!wp-content/themes/mi-tema/
+
+# Ignora archivos de sistema o de IDEs
+*.log
+*.tmp
+*.swp
+*.DS_Store
+.vscode/
+.idea/
+
+# Dependencias
+node_modules/
+vendor/
