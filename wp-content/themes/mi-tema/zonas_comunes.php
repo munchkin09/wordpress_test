@@ -1,7 +1,57 @@
 <?php 
 
+// Función para crear la tabla de mensajes
+function create_zonas_comunes_table() {
+    global $wpdb;
+    
+    $table_name = $wpdb->prefix . 'mi_mensajes';
+    
+    // Verificar si la tabla ya existe
+    if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
+        $charset_collate = $wpdb->get_charset_collate();
+        
+        $sql = "CREATE TABLE $table_name (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            nombre varchar(100) NOT NULL,
+            area varchar(100) NOT NULL,
+            mensaje text NOT NULL,
+            likes int(11) DEFAULT 0,
+            liked_users text,
+            fecha datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_area (area),
+            KEY idx_likes (likes),
+            KEY idx_fecha (fecha)
+        ) $charset_collate;";
+        
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql);
+        
+        // Marcar que la tabla fue creada
+        add_option('zonas_comunes_table_created', '1');
+    }
+}
+
+// Hook más transparente - se ejecuta cuando WordPress se inicializa completamente
+function zonas_comunes_setup_database() {
+    if (!get_option('zonas_comunes_table_created')) {
+        create_zonas_comunes_table();
+    }
+}
+add_action('wp_loaded', 'zonas_comunes_setup_database');
+
+// También crear la tabla cuando se ejecute cualquier funcionalidad relacionada (fallback)
+function zonas_comunes_ensure_table_exists() {
+    if (!get_option('zonas_comunes_table_created')) {
+        create_zonas_comunes_table();
+    }
+}
+
 // Handle form submissions
 function FormZonasComunesSubmission() {
+    // Asegurar que la tabla existe antes de procesar
+    zonas_comunes_ensure_table_exists();
+    
     // Verificar nonce para seguridad
     if (!wp_verify_nonce($_POST['zonas_comunes_nonce'], 'zonas_comunes_action')) {
         wp_die('Error de seguridad');
@@ -45,6 +95,9 @@ function FormZonasComunesSubmission() {
 // Handle likes
 function mitema_handle_like() {
     if (isset($_POST['mi_like_id']) && check_admin_referer('mi_like_action', 'mi_like_nonce') && is_user_logged_in()) {
+        // Asegurar que la tabla existe
+        zonas_comunes_ensure_table_exists();
+        
         $id = intval($_POST['mi_like_id']);
         $user_id = get_current_user_id();
 
@@ -68,6 +121,9 @@ add_action('init', 'mitema_handle_like');
 
 // Shortcode to display messages
 function mitema_display_mensajes() {
+    // Asegurar que la tabla existe
+    zonas_comunes_ensure_table_exists();
+    
     global $wpdb;
     $table = $wpdb->prefix . 'mi_mensajes';
     $entries = $wpdb->get_results("SELECT * FROM $table ORDER BY likes DESC, id DESC");
@@ -364,6 +420,9 @@ add_action('wp_head', 'zonas_comunes_add_styles');
 
 // Función para generar PDF del mensaje
 function generate_zonas_comunes_pdf() {
+    // Asegurar que la tabla existe
+    zonas_comunes_ensure_table_exists();
+    
     // Verificar nonce
     $id = intval($_GET['id']);
     if (!wp_verify_nonce($_GET['nonce'], 'pdf_nonce_' . $id)) {
