@@ -3,3 +3,24 @@ Theme Name: mi-tema
 Author: Codex
 Version: 1.0
 */
+
+.mi-mensaje {
+    margin-bottom: 20px;
+}
+
+.mi-mensaje .heart {
+    color: #ccc;
+    cursor: pointer;
+    font-size: 20px;
+    background: none;
+    border: none;
+    padding: 0;
+}
+
+.mi-mensaje .heart.liked {
+    color: red;
+}
+
+.mi-mensaje .like-count {
+    margin-left: 5px;
+}
