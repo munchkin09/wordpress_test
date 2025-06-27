@@ -62,4 +62,4 @@ add_action( 'wp_enqueue_scripts', 'twentytwentytwo_styles' );
 
 // Add block patterns.
 require get_template_directory() . '/inc/block-patterns.php';
-require get_template_directory() . '/zonas_comunes.php';
+require get_template_directory() . '/buzon_sugerencias.php';
