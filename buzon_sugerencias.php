@@ -988,9 +988,43 @@ function buzon_sugerencias_display($offset) {
 }
 
 add_shortcode( 'buzon_sugerencias', function( $atts, $content = null ){
-	var_dump("Soy el shortcode".$atts);
-	return buzon_sugerencias_display($atts["offset"]);
+        var_dump("Soy el shortcode".$atts);
+        return buzon_sugerencias_display($atts["offset"]);
 } );
+
+function buzon_sugerencias_get_page( $offset ) {
+    buzon_sugerencias_ensure_table_exists();
+    global $wpdb;
+    $table = $wpdb->prefix . 'buzon_sugerencias';
+    $fecha_hoy = date('Y-m-d');
+    $sugerencias = $wpdb->get_results( $wpdb->prepare(
+        "SELECT * FROM $table ORDER BY CASE WHEN likes = 0 AND DATE(fecha) = %s THEN fecha ELSE '1970-01-01' END DESC, likes DESC, id DESC LIMIT 10 OFFSET %d",
+        $fecha_hoy,
+        intval( $offset )
+    ) );
+
+    ob_start();
+    echo '<div class="buzon-sugerencias" id="lista-sugerencias">';
+    $primera_con_separador = true;
+    foreach ( $sugerencias as $sugerencia ) {
+        $likes = intval( $sugerencia->likes );
+        $fecha_sugerencia = date( 'Y-m-d', strtotime( $sugerencia->fecha ) );
+        $es_de_hoy = ( $fecha_sugerencia === $fecha_hoy );
+        if ( $primera_con_separador && ( $likes > 0 || ! $es_de_hoy ) ) {
+            echo '<div class="zona-nuevas-separator"></div>';
+            $primera_con_separador = false;
+        }
+        echo render_sugerencia_html( $sugerencia );
+    }
+    echo '<nav id="pager" aria-label="Paginación">';
+    echo '<button type="button" id="prev" class="btn pagination" disabled>← Anterior</button>';
+    echo '<span id="page-indicator" data-page="' . ( (int) ( $offset / 10 ) + 1 ) . '">' . ( (int) ( $offset / 10 ) + 1 ) . '</span>';
+    echo '<button type="button" id="next" class="btn pagination">Siguiente →</button>';
+    echo '</nav>';
+    echo '</div>';
+
+    return ob_get_clean();
+}
 
 // NUEVA FUNCIÓN: Renderizar HTML de una sugerencia
 function render_sugerencia_html($sugerencia) {
@@ -1103,13 +1137,23 @@ function buzon_sugerencias_submit_form() {
 
 //Manejo de Paginación
 function buzon_sugerencias_pagination() {
-	if (!wp_verify_nonce($_POST['buzon_sugerencias_pagination_nonce'], 'buzon_sugerencias_pagination_action')) {
+    if (!wp_verify_nonce($_POST['buzon_sugerencias_pagination_nonce'], 'buzon_sugerencias_pagination_action')) {
         wp_die('Error de seguridad');
     }
 
-    $offset = sanitize_text_field($_POST['offset']);
-	
-	return buzon_sugerencias_display($offset);
+    $offset = intval($_POST['offset']);
+    global $wpdb;
+    $table = $wpdb->prefix . 'buzon_sugerencias';
+    $total = (int) $wpdb->get_var("SELECT COUNT(*) FROM $table");
+    $html  = buzon_sugerencias_get_page($offset);
+    $page  = floor($offset / 10) + 1;
+    $max   = ceil($total / 10);
+
+    wp_send_json_success([
+        'html' => $html,
+        'page' => $page,
+        'max'  => $max,
+    ]);
 }
 
 //  Manejo de Like/Unlike
@@ -1500,88 +1544,66 @@ function buzon_sugerencias_form_shortcode() {
         });
     });
 		
-	//
-		
-	$('.pagination').on('click', function(e) {
-        e.preventDefault();
-		
-		var pagination = $(this).text();
-        var formData = {
-            action: 'buzonsugerenciaspagination',
-			offset: pagination,
-            buzon_sugerencias_pagination_nonce: buzon_sugerencias_pagination_ajax.nonce
-        };
-        
-		
-		let current = 1; // página actual (badge lleva la verdad visual)
-	const $feed  = $('#lista-sugerencias');
-	const $prev  = $('#prev');
-	const $next  = $('#next');
-	const $badge = $('#page-indicator');
+        // Configuración de paginación
+        const perPage = 10;
+        let current = parseInt($('#page-indicator').data('page')) || 1;
+        let $feed  = $('#lista-sugerencias');
+        let $prev  = $('#prev');
+        let $next  = $('#next');
+        let $badge = $('#page-indicator');
 
-	function loadPage(page) {
+        function attachPaginationEvents() {
+            $prev.off('click').on('click', function() { loadPage(current - 1); });
+            $next.off('click').on('click', function() { loadPage(current + 1); });
+        }
 
-		if (page < 1) return;
+        function loadPage(page) {
+            if (page < 1) return;
 
-		$prev.prop('disabled', true);
-		$next.prop('disabled', true);
-		$badge.text('…');
+            $prev.prop('disabled', true);
+            $next.prop('disabled', true);
+            $badge.text('…');
 
-		$.ajax({
-			type: 'POST',
-			url:  buzon_sugerencias_pagination_ajax.ajax_url,
-			data: formData,
-			dataType: 'json'
-		}).done(function (resp) {
+            $.ajax({
+                type: 'POST',
+                url: buzon_sugerencias_pagination_ajax.ajax_url,
+                data: {
+                    action: 'buzonsugerenciaspagination',
+                    offset: (page - 1) * perPage,
+                    buzon_sugerencias_pagination_nonce: buzon_sugerencias_pagination_ajax.nonce
+                },
+                dataType: 'json'
+            }).done(function(resp) {
+                if (!resp.success) return;
 
-			if (!resp.success) return;
+                $feed.replaceWith(resp.data.html);
+                $feed  = $('#lista-sugerencias');
+                $prev  = $('#prev');
+                $next  = $('#next');
+                $badge = $('#page-indicator');
+                current = resp.data.page;
+                $badge.text(current);
+                $prev.prop('disabled', current === 1);
+                $next.prop('disabled', current >= resp.data.max);
 
-			$feed.html(resp.data);
-			current = resp.data.page;
-			$badge.text(current);
-
-			// habilita / deshabilita según estemos al límite
-			$prev.prop('disabled', current === 1);
-			$next.prop('disabled', current >= resp.data.max);
-
-		}).fail(function (xhr, status) {
-			console.warn('AJAX fail:', status);
-			$badge.text('⚠️');
-		}).always(function () {
-		// Si no era la última, re-habilita —y si ya es la última, $next ya está desactivado
-			if (current > 1) $prev.prop('disabled', false);
-			if ($next.prop('disabled') === false) $next.prop('disabled', false);
-		});
-	}
-
-	// Eventos con jQuery
-	$prev.on('click', () => loadPage(current - 1));
-	$next.on('click', () => loadPage(current + 1));
-
-        
-        $.ajax({
-            url: buzon_sugerencias_pagination_ajax.ajax_url,
-            type: 'POST',
-            data: formData,
-            success: function(response) {
-                
-                if (response.success) {
-                   	window.crearSeparadorZonas();
-					alert(response.data);
-                } else {
-                    $responseDiv.removeClass('success').addClass('error')
-                              .html('<strong>Error:</strong> ' + response.data).show();
+                if (typeof window.crearSeparadorZonas === 'function') {
+                    window.crearSeparadorZonas();
                 }
-            },
-            error: function() {
-                $('#form-response').removeClass('success').addClass('error')
-                                   .html('<strong>Error de conexión:</strong> No se pudo enviar la sugerencia. Por favor, verifica tu conexión e inténtalo de nuevo.').show();
-            },
-            complete: function() {
-                $submitBtn.prop('disabled', false).html(originalText);
-            }
-        });
-    });	
+                if (typeof window.aplicarFiltroActual === 'function') {
+                    $('#lista-sugerencias .buzon-mensaje').each(function(){
+                        window.aplicarFiltroActual(this);
+                    });
+                }
+
+                attachPaginationEvents();
+            }).fail(function(xhr, status) {
+                console.warn('AJAX fail:', status);
+                $badge.text('⚠️');
+            });
+        }
+
+        attachPaginationEvents();
+    });
 		
 		
 		
@@ -1747,13 +1769,17 @@ add_action('wp_ajax_buzonsugerenciaspagination', 'buzon_sugerencias_pagination')
 // Enqueue scripts and styles
 function buzon_sugerencias_enqueue_scripts() {
     wp_enqueue_script('jquery');
-    
+
     wp_register_script('buzon-sugerencias-script', '', array('jquery'), '3.0', true);
     wp_enqueue_script('buzon-sugerencias-script');
-    
+
     wp_localize_script('buzon-sugerencias-script', 'buzon_sugerencias_ajax', [
         'ajax_url' => admin_url('admin-ajax.php'),
         'nonce' => wp_create_nonce('buzon_sugerencias_action')
+    ]);
+    wp_localize_script('buzon-sugerencias-script', 'buzon_sugerencias_pagination_ajax', [
+        'ajax_url' => admin_url('admin-ajax.php'),
+        'nonce' => wp_create_nonce('buzon_sugerencias_pagination_action')
     ]);
 }
 add_action('wp_enqueue_scripts', 'buzon_sugerencias_enqueue_scripts');
